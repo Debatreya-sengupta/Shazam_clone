@@ -34,7 +34,8 @@ async def recognize_api(file: UploadFile = File(...)) -> Dict[str, Any]:
             
         try:
             # 1. Shazam RapidAPI expects raw 44100Hz audio. Let's load the snippet for it.
-            y_rapid, sr_rapid = librosa.load(tmp_path, sr=44100, mono=True)
+            # CRITICAL FIX: Add duration=4.0 so we don't load a 3 minute file into RAM and crash Render!
+            y_rapid, sr_rapid = librosa.load(tmp_path, sr=44100, mono=True, duration=4.0)
             
             # Send max 4 seconds of audio to avoid 413 Payload Too Large and optimize speed
             max_samples = 44100 * 4
@@ -103,8 +104,9 @@ async def recognize_api(file: UploadFile = File(...)) -> Dict[str, Any]:
             if not is_match:
                 return {"message": "No match found", "confidence": 0}
             
-            # 2. Run our unique local Musical DNA analysis on the file!
-            y, sr = librosa.load(tmp_path, sr=22050)
+            # 2. Run our unique local Musical DNA analysis on a 10s snippet!
+            # CRITICAL FIX: Limit duration so Render doesn't crash from OOM
+            y, sr = librosa.load(tmp_path, sr=22050, duration=10.0)
             analysis = analyze_audio(y, sr)
             
             # Fetch recommendations from iTunes
