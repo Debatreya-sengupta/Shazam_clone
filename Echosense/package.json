@@ -1,0 +1,13 @@
+{
+  "name": "shazam-clone-root",
+  "version": "1.0.0",
+  "description": "Root workspace to start both frontend and backend",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && call ..\\.venv\\Scripts\\activate.bat && uvicorn main:app --reload"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
