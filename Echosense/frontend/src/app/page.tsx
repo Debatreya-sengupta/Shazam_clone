@@ -9,21 +9,44 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function Home() {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleAudioReady = async (file: File) => {
     setIsProcessing(true);
+    setWarmingUp(false);
     setError(null);
+
+    // Show a "warming up" hint after 15s so users know the server is waking
+    const warmTimer = setTimeout(() => setWarmingUp(true), 15000);
     try {
       const formData = new FormData();
       formData.append('file', file);
 
       // Support production deployments instead of hardcoded localhost
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${API_URL}/api/v1/recognize/`, {
-        method: 'POST',
-        body: formData,
-      });
+
+      // 90-second timeout — Render free tier needs time to cold-start + process
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
+
+      let res: Response;
+      try {
+        res = await fetch(`${API_URL}/api/v1/recognize/`, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        clearTimeout(warmTimer);
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId);
+        clearTimeout(warmTimer);
+        if (fetchErr.name === 'AbortError') {
+          throw new Error("The server is warming up from sleep. Please wait 30 seconds and try again!");
+        }
+        throw fetchErr;
+      }
 
       if (!res.ok) {
         throw new Error("Failed to recognize track. Make sure the backend is running.");
@@ -45,9 +68,11 @@ export default function Home() {
 
       router.push('/result');
     } catch (err: any) {
+      clearTimeout(warmTimer);
       console.error(err);
       setError(err.message || "An error occurred.");
       setIsProcessing(false);
+      setWarmingUp(false);
     }
   };
 
@@ -94,6 +119,11 @@ export default function Home() {
                 <span className="text-2xl font-bold text-primary animate-pulse">...</span>
               </div>
               <h2 className="text-2xl font-bold text-foreground">Analyzing Audio...</h2>
+              {warmingUp && (
+                <p className="text-sm text-gray-400 animate-pulse">
+                  Server is warming up from sleep — almost there!
+                </p>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
